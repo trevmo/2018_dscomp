@@ -99,3 +99,8 @@ ENV/
 
 # mypy
 .mypy_cache/
+data/
+MNIST-data/
+model/
+sample.py
+test_modules.ipynb
