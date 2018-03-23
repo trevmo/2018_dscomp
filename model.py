@@ -84,6 +84,9 @@ def form_model(features, labels, mode, params):
 		"classes": tf.argmax(input=output_layer, axis=1),
 		"probabilities": tf.nn.softmax(output_layer, name="soft_max_prob")
 	}
+	if mode == tf.estimator.ModeKeys.PREDICT:
+		return tf.estimator.EstimatorSpec(mode=mode, predictions=results)
+	
 	loss = tf.losses.sparse_softmax_cross_entropy(labels=labels,
 			logits=output_layer)
 
@@ -94,20 +97,23 @@ def form_model(features, labels, mode, params):
 		return tf.estimator.EstimatorSpec(mode=mode,
 			loss=loss,
 			train_op=train_optimizer)
-	if mode == tf.estimator.ModeKeys.PREDICT:
-		return tf.estimator.EstimatorSpec(mode=mode, predictions=results)
+
+	# mode == tf.estimator.ModeKeys.EVAL
+	eval_metrics = {
+		"accuracy": tf.metrics.accuracy(
+			labels=labels, 
+			predictions=results["classes"])}
+	return tf.estimator.EstimatorSpec(
+		mode=mode, 
+		loss=loss, 
+		eval_metric_ops=eval_metrics)
 
 
-def train_model(data, batch_size, num_steps, model_params):
+def generate_classifier(model_params):
 	"""
-	Train the model using the given data and parameters.
+	Form an estimator ("classifier") from the model.
 
-	Inputs:
-	- data: dictionary with the following elements:
-		- train_data: numpy array of training data
-		- train_labels: numpy array of training labels
-	- batch_size: size of mini-batches for training
-	- num_steps: number of steps to run the training
+	Input:
 	- model_params: dictionary containing the following elements:
 		- input_shape: shape of the input tensor
 		- conv_filters: number of filters to apply to the first convolution layer
@@ -118,13 +124,29 @@ def train_model(data, batch_size, num_steps, model_params):
 		- dense_units: dimension of the dense layer prior to output
 		- dropout_rate: rate of dropout in training
 		- output_units: number of classes
-	"""
-	tf.logging.set_verbosity(tf.logging.INFO)
 
-	classifier = tf.estimator.Estimator(
+	Return:
+	- CNN classifier
+	"""
+	return tf.estimator.Estimator(
 		model_fn=form_model,
 		params=model_params,
 		model_dir="model")
+
+
+def train_classifier(data, batch_size, num_steps, classifier):
+	"""
+	Train the classifier using the given data and parameters.
+
+	Inputs:
+	- data: dictionary with the following elements:
+		- inputs: numpy array of training data
+		- labels: numpy array of training labels
+	- batch_size: size of mini-batches for training
+	- num_steps: number of steps to run the training
+	- classifier: CNN from model
+	"""
+	tf.logging.set_verbosity(tf.logging.INFO)
 
 	train_input_fn = tf.estimator.inputs.numpy_input_fn(
 		x={"x": data["inputs"]},
@@ -138,3 +160,40 @@ def train_model(data, batch_size, num_steps, model_params):
 		hooks=[])
 
 	tf.app.run()
+
+
+def evaluate_classifier(data, classifier):
+	"""
+	Evalutate the classifier using the given data.
+
+	Inputs:
+	- data: dictionary with the following elements:
+		- inputs: numpy array of evaluation data
+		- labels: numpy array of evaluation labels
+	- classifier: trained CNN from model
+	"""
+	evaluate_input = tf.estimator.inputs.numpy_input_fn(
+		x={"x": data["inputs"]},
+		y=data["labels"],
+		num_epochs=1,
+		shuffle=False)
+	classifier.evaluate(input_fn=evaluate_input)
+
+
+def predict_with_classifier(data, classifier):
+	"""
+	Predict the classes/labels for the given data.
+
+	Inputs:
+	- data: input data to predict labels for
+	- classifier: trained CNN from model
+
+	Return:
+	- dictionary object containing classes and probabilities per input
+	"""
+	predict_input = tf.estimator.inputs.numpy_input_fn(
+		x={"x": data},
+		y=None,
+		num_epochs=1,
+		shuffle=False)
+	return classifier.predict(input_fn=predict_input)
