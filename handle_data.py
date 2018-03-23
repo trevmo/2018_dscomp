@@ -9,7 +9,7 @@ reformatting for use in a neural network, and saving results away in files.
 import numpy as np 
 import pandas as pd
 
-def read_data(path, filename, drop_col="index"):
+def read_data(path, filename, drop_col="index", dt="float32"):
 	"""
 	Read file data in as a dataframe, then drop the specified column and convert
 	to a numpy array.
@@ -22,16 +22,9 @@ def read_data(path, filename, drop_col="index"):
 	Return:
 	- numpy array of the data
 	"""
-	data = pd.read_csv(path + filename, sep=",")
+	data = pd.read_csv(path + filename, sep=",", dtype=dt)
 	data = data.drop(drop_col, axis=1)
 	return data.as_matrix()
-
-
-def output_data(data, outfile):
-	"""
-	TODO
-	"""
-    pass
 
 
 def format_data(arr, dimen, data_type):
