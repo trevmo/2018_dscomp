@@ -8,6 +8,7 @@ reformatting for use in a neural network, and saving results away in files.
 
 import numpy as np 
 import pandas as pd
+import csv
 
 def read_data(path, filename, drop_col="index", dt="float32"):
 	"""
@@ -25,6 +26,12 @@ def read_data(path, filename, drop_col="index", dt="float32"):
 	data = pd.read_csv(path + filename, sep=",", dtype=dt)
 	data = data.drop(drop_col, axis=1)
 	return data.as_matrix()
+
+
+def output_data(filename, index, val):
+	with open(filename, 'a') as file:
+		writer = csv.writer(file)
+		writer.writerow((index, val))
 
 
 def format_data(arr, dimen, data_type):
@@ -52,7 +59,8 @@ def format_data(arr, dimen, data_type):
 	if type(dimen) != tuple:
 		print("Error: expected tuple type.")
 		return None
+	factor = int(dimen[1] / dimen[0])
 	return {
 		"train": [np.reshape(row, dimen) for row in arr],
-		"test": [np.hsplit(np.reshape(row, dimen), int(dimen[1] / dimen[0])) for row in arr]
+		"test": [np.hsplit(row, factor) for row in arr]
 	}.get(data_type)
