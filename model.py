@@ -3,6 +3,10 @@ This file contains methods for forming a Tensorflow-based CNN. It is
 designed for detecting numeric digits or simple mathematical symbols from an
 input image.
 
+Since this was my first real project with Tensorflow, I utilized this reference
+(https://www.tensorflow.org/tutorials/layers) to help understand how to construct
+a neural network model in Tensorflow.
+
 @author trevmo
 """
 

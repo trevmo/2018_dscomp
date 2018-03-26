@@ -1,4 +1,7 @@
 """
+This file contains the definition of the Grader class. It is used in conjunction
+with the CNN model from model.py.
+
 
 @author trevmo
 """
@@ -10,6 +13,15 @@ import csv
 
 class Grader(object):
 	"""
+	The Grader class is designed to analyze the accuracy of images of handwritten
+	equations.
+
+	These equations can take the form of:
+	- a + b = c
+	- c = a - b
+	It reformats these images into one per numeric value or symbol and then hands
+	them off to the classifier to predict the values. From there it checks the
+	correctness of the equation and stores the results in a file.
 	"""
 
 	PLUS = 10
@@ -18,11 +30,33 @@ class Grader(object):
 
 	def __init__(self, classifier, equations):
 		"""
+		Construct a new instance of the Grader class with the given classifier
+		and input equations.
+
+		Inputs:
+		- classifier: TensorFlow Estimator
+		- equations: list of numpy arrays forming the input equations
+
+		Return:
+		- instance of Grader
 		"""
 		self.classifier = classifier
 		self.equations = equations
 
 	def grade(self, dimen, num_vals, result_file):
+		"""
+		Grade the equations.
+
+		This is the primary method of the class. It reshapes/formats the input
+		images for prediction per number/symbol in the equation. Once each part
+		of the equation as been predicted, it then grades the accuracy of the
+		overall equation and writes the result to a file.
+
+		Inputs:
+		- dimen: tuple of dimensions to reshape the flattened image into
+		- num_vals: number of numeric or symbolic values per equation
+		- result_file: name of the file to store the results in
+		"""
 		split_equations = [np.hsplit(np.reshape(
 			row, dimen), num_vals) for row in self.equations]
 		index = 0
@@ -46,11 +80,23 @@ class Grader(object):
 					writer.writerow((index, 0))
 					index += 1
 					continue
-				is_correct = self.evaluate_equation(index, eq_dict)
+				is_correct = self.evaluate_equation(eq_dict)
 				writer.writerow((index,int(is_correct)))
 				index += 1
 
 	def translate_equation(self, dimen, equation_arr):
+		"""
+		Translate the separate images of the numeric and symbolic values of an
+		equation into flattened arrays, concatenate them into a numpy array, and
+		predict each of the values.
+
+		Inputs:
+		- dimen: tuple dimension of a flattened piece of the equation
+		- equation_arr: list of numpy arrays (one per number/symbol in the equation)
+
+		Return:
+		- list of predicted values in the equation
+		"""
 		for index in range(len(equation_arr)):
 			equation_arr[index] = np.reshape(equation_arr[index], dimen)
 		equation = np.append([equation_arr[0]], [equation_arr[1]], axis=0)
@@ -59,7 +105,20 @@ class Grader(object):
 		results = mdl.predict_with_classifier(equation, self.classifier)
 		return [sym["classes"] for sym in results]
 
-	def evaluate_equation(self, index, equation_vals):
+	def evaluate_equation(self, equation_vals):
+		"""
+		Evaluate the accuracy of the equation.
+
+		Input:
+		- equation_vals: dictionary with the follwing elements:
+			- x1: first numeric value
+			- x2: second numeric value
+			- answer: expected answer to the equation's operation
+			- op: equation's operation {+, -}
+		
+		Return:
+		- boolean indicating whether the equation is correct or not
+		"""
 		x1 = equation_vals["x1"]
 		x2 = equation_vals["x2"]
 		ans = equation_vals["answer"]
@@ -69,4 +128,7 @@ class Grader(object):
 		elif op == self.MINUS:
 			return ((x1 - x2) == ans)
 		else:
+			# In case the operation symbol was mis-predicted by the classifier,
+			# check if either of the operations return a correct result.
+			# Otherwise, return false.
 			return ((x1 + x2 == ans) or (x1 - x2 == ans))
