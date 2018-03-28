@@ -61,10 +61,13 @@ class Grader(object):
 			row, dimen), num_vals) for row in self.equations]
 		index = 0
 		new_dimen = (dimen[0]**2,)
-		with open(result_file, 'a') as file:
+		equation_arr = self.preprocess_equations(new_dimen, split_equations)
+		results = mdl.predict_with_classifier(equation_arr, self.classifier)
+		results = [sym["classes"] for sym in results]
+		with open(result_file, 'w') as file:
 			writer = csv.writer(file)
-			for equation in split_equations:
-				predicted_values = self.translate_equation(new_dimen, equation)
+			for start_index in range(0, len(results), num_vals):
+				predicted_values = results[start_index:start_index + num_vals]
 				eq_dict = {}
 				if predicted_values[1] == self.EQUALS:
 					eq_dict["answer"] = predicted_values[0]
@@ -77,12 +80,21 @@ class Grader(object):
 					eq_dict["op"] = predicted_values[1]
 					eq_dict["x2"] = predicted_values[2]
 				else:
+					print(predicted_values)
 					writer.writerow((index, 0))
 					index += 1
 					continue
 				is_correct = self.evaluate_equation(eq_dict)
 				writer.writerow((index,int(is_correct)))
 				index += 1
+
+	def preprocess_equations(self, dimen, equation_list):
+		equation_arr = self.translate_equation(dimen, equation_list[0])
+		for equation in equation_list[1:]:
+			equation_arr = np.append(equation_arr,
+				self.translate_equation(dimen, equation),
+				axis=0)
+		return equation_arr
 
 	def translate_equation(self, dimen, equation_arr):
 		"""
@@ -102,8 +114,9 @@ class Grader(object):
 		equation = np.append([equation_arr[0]], [equation_arr[1]], axis=0)
 		for sym in equation_arr[2:]:
 			equation = np.append(equation, [sym], axis=0)
-		results = mdl.predict_with_classifier(equation, self.classifier)
-		return [sym["classes"] for sym in results]
+		return equation
+		# results = mdl.predict_with_classifier(equation, self.classifier)
+		# return [sym["classes"] for sym in results]
 
 	def evaluate_equation(self, equation_vals):
 		"""
