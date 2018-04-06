@@ -1,30 +1,35 @@
 """
-This file contains methods for forming a Tensorflow-based CNN. It is
+This file contains methods for forming a TFLearn-based CNN. It is
 designed for detecting numeric digits or simple mathematical symbols from an
 input image.
 
-Since this was my first real project with Tensorflow, I utilized this reference
+Initially I implemented this with vanilla Tensorflow and utilized this reference
 (https://www.tensorflow.org/tutorials/layers) to help understand how to construct
 a neural network model in Tensorflow.
 
+However, after realizing that it would be helpful to include data preprocessing
+and augmentation, I found that TFLearn provided those as built-in class/methods
+to their wrapper of Tensorflow. I then converted my Tensorflow model into a
+TFLearn model.
+
 @author trevmo
 """
+from __future__ import division, print_function, absolute_import
+import tflearn
+import tflearn.layers as tfl
 
-import tensorflow as tf
 
-
-def form_model(features, labels, mode, params):
+def form_model(params):
 	"""
-	Create a Tensorflow model with the following characteristics:
-	- input layer -> convolutional -> max pooling -> convolutional -> max pooling
-	-> flattened pooling -> dense -> (dropout) -> output layer
+	Create a TFLearn model with the following characteristics:
+	- data preprocessing (std. normalization)
+	- data augmentation (rotation of up to 15 degrees)
+	- two convolutional and pooling layers
+	- batch normalization
 	- utilizes Adam optimizer for training
-	- relies on sparse softmax cross entropy loss function
+	- relies on categorical cross entropy loss
 
 	Inputs:
-	- features: input features for the model
-	- labels: input labels
-	- mode: {TRAIN, EVALUATE, PREDICT}
 	- params: dictionary containing the following elements:
 		- input_shape: shape of the input tensor
 		- conv_filters: number of filters to apply to the first convolution layer
@@ -37,157 +42,95 @@ def form_model(features, labels, mode, params):
 		- output_units: number of classes
 
 	Return:
-	- estimator for the given mode of use
+	- model for input into the DNN class constructor
 	"""
-	
-	input_layer = tf.reshape(features["x"], params["input_shape"])
-	
-	first_conv = tf.layers.conv2d(inputs=input_layer,
-		filters=params["conv_filters"],
-		kernel_size=params["conv_kernel"],
-		activation=tf.nn.relu,
-		padding="same",
-		name="first_conv")
+	image_processor = tflearn.ImagePreprocessing()
+	image_processor.add_featurewise_stdnorm()
 
-	first_conv_norm = tf.layers.batch_normalization(first_conv)
-	
-	first_pool = tf.layers.max_pooling2d(inputs=first_conv_norm,
-		pool_size=params["pool_size"],
-		strides=params["pool_strides"],
-		name="first_pool")
-	
-	second_conv = tf.layers.conv2d(inputs=first_pool,
-		filters=2 * params["conv_filters"],
-		kernel_size=params["conv_kernel"],
-		activation=tf.nn.relu,
-		padding="same",
-		name="second_conv")
+	image_augmentator = tflearn.ImageAugmentation()
+	image_augmentator.add_random_rotation(max_angle=15.0)
 
-	second_conv_norm = tf.layers.batch_normalization(second_conv)
-	
-	second_pool = tf.layers.max_pooling2d(inputs=second_conv_norm,
-		pool_size=params["pool_size"],
-		strides=params["pool_strides"],
-		name="second_pool")
-	
+	input_layer = tfl.input_data(shape=params["input_shape"],
+		data_preprocessing=image_processor,
+		data_augmentation=image_augmentator)
+	first_conv = tfl.conv_2d(input_layer,
+		params["conv_filters"],
+		params["conv_kernel"],
+		activation='relu',
+		padding='same')
+	first_pool = tfl.max_pool_2d(first_conv,
+		params["pool_size"],
+		strides=params["pool_strides"])
+	first_pool_norm = tfl.batch_normalization(first_pool)
+
+	second_conv = tfl.conv_2d(first_pool_norm,
+		2 * params["conv_filters"],
+		params["conv_kernel"],
+		activation='relu',
+		padding='same')
+	second_pool = tfl.max_pool_2d(second_conv,
+		params["pool_size"],
+		params["pool_strides"])
+	second_pool_norm = tfl.batch_normalization(second_pool)
+
 	dimensions = second_pool.get_shape().as_list()
-	second_pool_flat = tf.reshape(
-		second_pool, [-1, (dimensions[1]**2) * dimensions[-1]])
-	
-	
-	dense_layer = tf.layers.dense(inputs=second_pool_flat,
-		units=params["dense_units"],
-		activation=tf.nn.relu,
-		name="dense")
+	second_pool_flat = tfl.fully_connected(second_pool_norm,
+		dimensions[1],
+		activation='relu')
+	flat_dropout = tfl.dropout(second_pool_flat, params["dropout_rate"])
 
-	dense_layer_norm = tf.layers.batch_normalization(dense_layer)
-	
-	dropout_layer = tf.layers.dropout(inputs=dense_layer_norm,
-		rate=params["dropout_rate"],
-		training=mode == tf.estimator.ModeKeys.TRAIN)
-	
-	output_layer = tf.layers.dense(inputs=dropout_layer,
-		units=params["output_units"],
-		name="outputs")
+	dense_layer = tfl.fully_connected(flat_dropout, 
+		params["dense_units"],
+		activation='relu')
+	dense_layer_dropout = tfl.dropout(dense_layer, params["dropout_rate"])
 
-	output_layer_norm = tf.layers.batch_normalization(output_layer)
-	
-	results = {
-		"classes": tf.argmax(input=output_layer_norm, axis=1),
-		"probabilities": tf.nn.softmax(output_layer_norm, name="soft_max_prob")
-	}
-	if mode == tf.estimator.ModeKeys.PREDICT:
-		return tf.estimator.EstimatorSpec(mode=mode, predictions=results)
-	
-	loss = tf.losses.sparse_softmax_cross_entropy(labels=labels,
-			logits=output_layer_norm)
+	output_layer = tfl.fully_connected(dense_layer_dropout,
+		params["output_units"],
+		activation='softmax')
 
-	if mode == tf.estimator.ModeKeys.TRAIN:
-		optimizer = tf.train.AdamOptimizer()
-		train_optimizer = optimizer.minimize(loss=loss,
-			global_step=tf.train.get_global_step())
-		return tf.estimator.EstimatorSpec(mode=mode,
-			loss=loss,
-			train_op=train_optimizer)
+	return tfl.regression(output_layer,
+		optimizer='adam',
+		loss='categorical_crossentropy',
+		name='results')
 
-	# mode == tf.estimator.ModeKeys.EVAL
-	eval_metrics = {
-		"accuracy": tf.metrics.accuracy(
-			labels=labels, 
-			predictions=results["classes"])}
-	return tf.estimator.EstimatorSpec(
-		mode=mode, 
-		loss=loss, 
-		eval_metric_ops=eval_metrics)
-
-
-def generate_classifier(model_params):
+def generate_classifier(model, model_dir):
 	"""
-	Form an estimator ("classifier") from the model.
+	Form a Deep Neural Network ("classifier") from the model.
 
 	Input:
-	- model_params: dictionary containing the following elements:
-		- input_shape: shape of the input tensor
-		- conv_filters: number of filters to apply to the first convolution layer
-			- second convolution layer is 2*this value
-		- conv_kernel: shape of the convolutional kernel for both layers
-		- pool_size: shape of the pool for both layers
-		- pool_strides: size of the pool stride for both layers
-		- dense_units: dimension of the dense layer prior to output
-		- dropout_rate: rate of dropout in training
-		- output_units: number of classes
+	- model: TFLearn network/model
+	- model_dir: path to store checkpoints
 
 	Return:
 	- CNN classifier
 	"""
-	return tf.estimator.Estimator(
-		model_fn=form_model,
-		params=model_params,
-		model_dir=model_params["dir"])
+	return tflearn.DNN(model, checkpoint_path=model_dir)
 
 
-def train_classifier(data, batch_size, num_steps, classifier):
+def train_classifier(classifier, data, percent_val, num_epochs, num_steps):
 	"""
 	Train the classifier using the given data and parameters.
 
 	Inputs:
+	- classifier: tflearn.DNN()
 	- data: dictionary with the following elements:
 		- inputs: numpy array of training data
 		- labels: numpy array of training labels
-	- batch_size: size of mini-batches for training
-	- num_steps: number of steps to run the training
-	- classifier: CNN from model
+	- percent_val: percent of training data to use for validation
+	- num_epochs: number of epochs to run training
+	- num_steps: number of steps to store snapshots at
+
+	Return:
+	- trained classifier
 	"""
-	tf.logging.set_verbosity(tf.logging.INFO)
-
-	train_input_fn = tf.estimator.inputs.numpy_input_fn(
-		x={"x": data["inputs"]},
-		y=data["labels"],
-		batch_size=batch_size,
-		num_epochs=None,
-		shuffle=True)
-	classifier.train(
-		input_fn=train_input_fn,
-		steps=num_steps,
-		hooks=[])
-
-
-def evaluate_classifier(data, classifier):
-	"""
-	Evalutate the classifier using the given data.
-
-	Inputs:
-	- data: dictionary with the following elements:
-		- inputs: numpy array of evaluation data
-		- labels: numpy array of evaluation labels
-	- classifier: trained CNN from model
-	"""
-	evaluate_input = tf.estimator.inputs.numpy_input_fn(
-		x={"x": data["inputs"]},
-		y=data["labels"],
-		num_epochs=1,
-		shuffle=False)
-	classifier.evaluate(input_fn=evaluate_input)
+	classifier.fit(data["inputs"],
+		data["labels"],
+		n_epoch=num_epochs,
+		validation_set=percent_val,
+		snapshot_step=num_steps,
+		show_metric=True,
+		run_id="cnn_classifier")
+	return classifier
 
 
 def predict_with_classifier(data, classifier):
@@ -199,11 +142,6 @@ def predict_with_classifier(data, classifier):
 	- classifier: trained CNN from model
 
 	Return:
-	- dictionary object containing classes and probabilities per input
+	- list of results
 	"""
-	predict_input = tf.estimator.inputs.numpy_input_fn(
-		x={"x": data},
-		y=None,
-		num_epochs=1,
-		shuffle=False)
-	return classifier.predict(input_fn=predict_input)
+	return classifier.predict_label(data)
