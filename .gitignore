@@ -104,3 +104,4 @@ MNIST-data/
 model/
 sample.py
 test_modules.ipynb
+z_tfl_model*
