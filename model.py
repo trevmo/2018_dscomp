@@ -48,8 +48,10 @@ def form_model(features, labels, mode, params):
 		activation=tf.nn.relu,
 		padding="same",
 		name="first_conv")
+
+	first_conv_norm = tf.layers.batch_normalization(first_conv)
 	
-	first_pool = tf.layers.max_pooling2d(inputs=first_conv,
+	first_pool = tf.layers.max_pooling2d(inputs=first_conv_norm,
 		pool_size=params["pool_size"],
 		strides=params["pool_strides"],
 		name="first_pool")
@@ -60,8 +62,10 @@ def form_model(features, labels, mode, params):
 		activation=tf.nn.relu,
 		padding="same",
 		name="second_conv")
+
+	second_conv_norm = tf.layers.batch_normalization(second_conv)
 	
-	second_pool = tf.layers.max_pooling2d(inputs=second_conv,
+	second_pool = tf.layers.max_pooling2d(inputs=second_conv_norm,
 		pool_size=params["pool_size"],
 		strides=params["pool_strides"],
 		name="second_pool")
@@ -75,24 +79,28 @@ def form_model(features, labels, mode, params):
 		units=params["dense_units"],
 		activation=tf.nn.relu,
 		name="dense")
+
+	dense_layer_norm = tf.layers.batch_normalization(dense_layer)
 	
-	dropout_layer = tf.layers.dropout(inputs=dense_layer,
+	dropout_layer = tf.layers.dropout(inputs=dense_layer_norm,
 		rate=params["dropout_rate"],
 		training=mode == tf.estimator.ModeKeys.TRAIN)
 	
 	output_layer = tf.layers.dense(inputs=dropout_layer,
 		units=params["output_units"],
 		name="outputs")
+
+	output_layer_norm = tf.layers.batch_normalization(output_layer)
 	
 	results = {
-		"classes": tf.argmax(input=output_layer, axis=1),
-		"probabilities": tf.nn.softmax(output_layer, name="soft_max_prob")
+		"classes": tf.argmax(input=output_layer_norm, axis=1),
+		"probabilities": tf.nn.softmax(output_layer_norm, name="soft_max_prob")
 	}
 	if mode == tf.estimator.ModeKeys.PREDICT:
 		return tf.estimator.EstimatorSpec(mode=mode, predictions=results)
 	
 	loss = tf.losses.sparse_softmax_cross_entropy(labels=labels,
-			logits=output_layer)
+			logits=output_layer_norm)
 
 	if mode == tf.estimator.ModeKeys.TRAIN:
 		optimizer = tf.train.AdamOptimizer()
@@ -135,7 +143,7 @@ def generate_classifier(model_params):
 	return tf.estimator.Estimator(
 		model_fn=form_model,
 		params=model_params,
-		model_dir="model")
+		model_dir=model_params["dir"])
 
 
 def train_classifier(data, batch_size, num_steps, classifier):
@@ -162,8 +170,6 @@ def train_classifier(data, batch_size, num_steps, classifier):
 		input_fn=train_input_fn,
 		steps=num_steps,
 		hooks=[])
-
-	tf.app.run()
 
 
 def evaluate_classifier(data, classifier):
