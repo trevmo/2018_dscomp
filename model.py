@@ -17,6 +17,7 @@ TFLearn model.
 from __future__ import division, print_function, absolute_import
 import tflearn
 import tflearn.layers as tfl
+import os.path
 
 
 def form_model(params):
@@ -44,14 +45,14 @@ def form_model(params):
 	Return:
 	- model for input into the DNN class constructor
 	"""
-	image_processor = tflearn.ImagePreprocessing()
-	image_processor.add_featurewise_stdnorm()
+	# image_processor = tflearn.ImagePreprocessing()
+	# image_processor.add_featurewise_stdnorm()
 
 	image_augmentator = tflearn.ImageAugmentation()
 	image_augmentator.add_random_rotation(max_angle=15.0)
 
 	input_layer = tfl.input_data(shape=params["input_shape"],
-		data_preprocessing=image_processor,
+		data_preprocessing=None,
 		data_augmentation=image_augmentator)
 	first_conv = tfl.conv_2d(input_layer,
 		params["conv_filters"],
@@ -77,9 +78,9 @@ def form_model(params):
 	second_pool_flat = tfl.fully_connected(second_pool_norm,
 		dimensions[1],
 		activation='relu')
-	flat_dropout = tfl.dropout(second_pool_flat, params["dropout_rate"])
+	#flat_dropout = tfl.dropout(second_pool_flat, params["dropout_rate"])
 
-	dense_layer = tfl.fully_connected(flat_dropout, 
+	dense_layer = tfl.fully_connected(second_pool_flat, 
 		params["dense_units"],
 		activation='relu')
 	dense_layer_dropout = tfl.dropout(dense_layer, params["dropout_rate"])
@@ -107,7 +108,13 @@ def generate_classifier(model, model_dir):
 	return tflearn.DNN(model, checkpoint_path=model_dir)
 
 
-def train_classifier(classifier, data, percent_val, num_epochs, num_steps):
+def train_classifier(classifier, 
+							data, 
+							percent_val=0.1, 
+							num_epochs=1, 
+							num_steps=1000, 
+							batch_size=100,
+							model_file="tfl_model"):
 	"""
 	Train the classifier using the given data and parameters.
 
@@ -123,13 +130,17 @@ def train_classifier(classifier, data, percent_val, num_epochs, num_steps):
 	Return:
 	- trained classifier
 	"""
+	if os.path.isfile(model_file):
+		classifier.load(model_file)
 	classifier.fit(data["inputs"],
 		data["labels"],
 		n_epoch=num_epochs,
 		validation_set=percent_val,
 		snapshot_step=num_steps,
 		show_metric=True,
+		batch_size=batch_size,
 		run_id="cnn_classifier")
+	classifier.save(model_file)
 	return classifier
 
 
