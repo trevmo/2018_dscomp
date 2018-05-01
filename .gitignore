@@ -102,6 +102,9 @@ ENV/
 data/
 MNIST-data/
 model/
+model[0-9]/
 sample.py
 test_modules.ipynb
-z_tfl_model*
+*[_.]tfl[_.]*
+*.csv
+checkpoint
