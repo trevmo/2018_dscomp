@@ -163,8 +163,6 @@ def train_classifier(data, batch_size, num_steps, classifier):
 		steps=num_steps,
 		hooks=[])
 
-	tf.app.run()
-
 
 def evaluate_classifier(data, classifier):
 	"""
