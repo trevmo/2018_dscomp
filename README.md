@@ -1,10 +1,10 @@
 # 2018 Data Science Competition
 
 ## Overview
-During the spring semester of my senior year at the University of Idaho, I took a Mathematics of Deep Learning course. As part of the course, the professors hosted a data science competition, open to all students (undergraduate and graduate) at the university. The competition had two parts: one problem dealing with machine learning and another contest for data visualization techniques. I participated in the machine learning contest.
+During the spring semester of my senior year at the University of Idaho, I took Mathematics of Deep Learning (MATH 404). As part of the course, the professors hosted a data science competition, open to all students (undergraduate and graduate) at the university. The competition had two parts: one focused on machine learning and another on data visualization techniques. I participated in the machine learning component.
 
 ## Problem
-For the machine learning competition, we were tasked with designing a neural network to recognize handwritten digits and mathematical operators (+, -, =) with the end goal of grading simple equations comprised of those digits and operators.
+For the machine learning component, we were tasked with designing a neural network that recognizes handwritten digits and mathematical operators (+, -, =) with the end goal of grading simple equations comprised of those digits and operators.
 
 ### Training Data*
 The training data set is an array with 80,000 rows and 577 columns. The first entry of each row is the index (or ID) of that row, and the remaining 576 entries are real numbers between 0.000 and 1.000, which represent signal intensity at the corresponding pixels. Once reshaped as a 24x24 array (that is, putting the first 24 entries in the first row, and the next 24 entries in the second row, and so on), these 576 entries represent a greyscale image of either a handwritten digit from 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 or a handwritten symbol from +, -, = with label a label from 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 respectively. The true label of this image is recorded in the corresponding row of the training labels. 
@@ -27,6 +27,8 @@ Both models rely on the Adam optimizer and cross entropy loss calculation.
 
 ### Tensorflow 
 - Branch: [master](https://github.com/trevmo/2018_dscomp)
+
+![TensorFlow CNN diagram](diagrams/CNN_diagram.png)
 
 Initially, I implemented a CNN in TensorFlow. The CNN had the following structure:
 - Input layer
@@ -63,7 +65,7 @@ While I did not finish the work on this branch within the scope of the competiti
 It was an interesting exercise, exposing me to a new package and concepts. It would be interesting to complete the work at some point and see how it performs compared to the complete TensorFlow model/Grader combo. However, that would require access to the full test data set with labels.
 
 ### Grader class
-Both models rely on a Grader class to perform the actual analysis required by the competition problem statement. This class processes the test data, dividing each equation image array into five separate images (corresponding to the numeric digits and mathematical operators comprising the equation). It then runs each image through the trained network, predicting the value or operator. From there, it checks the accuracy of the complete equation and logs the predicted answer to a file.
+Both models rely on methods from the Grader class to perform the actual analysis required by the competition problem statement. The methods in this class processes the test data, dividing each equation image array into five separate images (corresponding to the numeric digits and mathematical operators comprising the equation). They then run each image through the trained network, predicting the value or operator. From there, the methods check the accuracy of the complete equation and log the predicted answer to a file.
 
 Initially, I structured the class so that it passed each individiual image to the network for prediction. However, this process was painfully slow -- taking 5+ hours to complete the test set of 20,000 equations. In order to speed up the process, I restructured it so that it would reshape the test data into a large matrix containing 100,000 images (1 image per row in the matrix / 5 images per equation). It would then predict the values for the entire test set in one pass. After the computing the predictions, the Grader class would loop over the results to grade each equation. This reduced the run time to ~35 minutes, with the bulk of that time spent on processing and reshaping the data. With a little more work, I am sure it could be further optimized.
 
